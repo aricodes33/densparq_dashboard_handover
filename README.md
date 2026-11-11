@@ -11,7 +11,8 @@ This repo is the **complete front end**, running against an **in-browser mock AP
 | [`docs/openapi.yaml`](docs/openapi.yaml) | 155 operations with request/response schemas, error codes and allowed roles (`x-roles`). Generated from the mock router. |
 | [`docs/schema.sql`](docs/schema.sql) + [`docs/data-model.md`](docs/data-model.md) | PostgreSQL DDL with constraints (court-overlap exclusion, four-eyes check, one published rules version) and the ERD |
 | [`docs/research/venue-kpi-definitions.md`](docs/research/venue-kpi-definitions.md) | Researched KPI formulas and benchmarks (sources listed; benchmarks weak) |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | **Start here (backend):** run, create the DB, build the API, connect the live site, go-live checklist, rollback |
+| [`HANDOVER.md`](HANDOVER.md) | One-page summary for the backend engineer (shareable) |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | **Start here (backend):** run, create the DB, build the API, host it, go-live checklist, rollback |
 | [`docs/BACKEND-HANDOFF.md`](docs/BACKEND-HANDOFF.md) | Gaps not yet specified and open product decisions |
 | [`docs/business-rules.md`](docs/business-rules.md) | Fixture generation, scheduling, clashes, scoring reducers for all 6 sports, standings and tie-breakers, registration and refund state machines, notifications, privacy |
 

@@ -10,7 +10,7 @@ export type RegView = Registration & { players: Player[] };
 export const useMe = () => useQuery({ queryKey: ['me'], queryFn: () => api.get<{ user: User; role: string; memberships: Membership[]; orgs: Organization[] }>('/me') });
 export const useTournaments = (org: string, include?: string) => useQuery({ queryKey: ['t', 'list', org, include], queryFn: () => api.get<TView[]>(`/orgs/${org}/tournaments${include ? '?include=' + include : ''}`) });
 export const useTournament = (id?: string) => useQuery({ queryKey: ['t', id], enabled: !!id, queryFn: () => api.get<TView>(`/tournaments/${id}`) });
-export const useDashboard = (id: string) => useQuery({ queryKey: ['t', id, 'dash'], queryFn: () => api.get<any>(`/tournaments/${id}/dashboard`), refetchInterval: 15000 });
+export const useDashboard = (id: string) => useQuery({ queryKey: ['t', id, 'dash'], enabled: !!id, queryFn: () => api.get<any>(`/tournaments/${id}/dashboard`), refetchInterval: 15000 });
 export const useChecklist = (id: string) => useQuery({ queryKey: ['t', id, 'checklist'], queryFn: () => api.get<{ id: string; label: string; ok: boolean; step: number }[]>(`/tournaments/${id}/checklist`) });
 export const useRules = (id: string) => useQuery({ queryKey: ['t', id, 'rules'], queryFn: () => api.get<{ versions: RuleVersion[]; published?: RuleVersion; ackStats: { total: number; onLatest: number; needsReack: number } }>(`/tournaments/${id}/rules`) });
 export const useRegistrations = (id: string, qs = '') => useQuery({ queryKey: ['t', id, 'regs', qs], queryFn: () => api.get<RegView[]>(`/tournaments/${id}/registrations${qs}`) });

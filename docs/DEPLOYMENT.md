@@ -1,6 +1,6 @@
 # Deployment guide (backend engineer)
 
-The goal: replace the in-browser mock with a real API and Postgres database, then point the live front end at it. The front end already works and is deployed. You build the backend to a contract that already exists.
+The goal: replace the in-browser mock with a real API and Postgres database, then host the front end with it. The front end is finished; you build the backend to a contract that already exists. **No particular hosting provider is required.** The front end builds to plain static files that any web server can serve.
 
 **Read in this order:**
 1. This file: how to run, build and deploy.
@@ -12,12 +12,13 @@ The goal: replace the in-browser mock with a real API and Postgres database, the
 ## 0. What exists today
 
 ```
-Browser ──► Netlify (static React app, hash router)
+Browser ──► any static host (React app built to dist/, hash router)
               └── src/api/client.ts ──► VITE_API_MODE=mock  → src/mock/handlers.ts (in-browser fake API)   ◄── today
                                      └► VITE_API_MODE=http  → ${VITE_API_BASE}/...  → your API → Postgres   ◄── target
 ```
 
-- **Front end:** React 18, Vite and TypeScript. Netlify site `densparq-tournaments` serves https://densparq-tournaments.netlify.app
+- **Front end:** React 18, Vite and TypeScript. `npm run build` outputs static files to `dist/`. The app uses hash URLs (`/#/o/...`), so the server needs **no rewrite rules**: it only serves `index.html` and `assets/`.
+- `netlify.toml` belongs to the current demo hosting. It isn't required; its security headers are reproduced in §4.
 - **Every network call** goes through one file, `src/api/client.ts`. Changing one environment variable switches it from the mock to your API.
 - **The mock is the reference implementation.** Each OpenAPI operation has a handler in `src/mock/handlers.ts`, `venueHandlers.ts` or `academyHandlers.ts`. The handler shows the exact side effects: audit rows, notifications, waitlist promotion. Read it whenever the spec is unclear.
 
@@ -25,7 +26,7 @@ Browser ──► Netlify (static React app, hash router)
 
 ## 1. Run the front end locally (5 minutes)
 
-Needs Node 22 (the version Netlify uses).
+Needs Node 22.
 
 ```bash
 npm ci
@@ -37,7 +38,7 @@ npm run dev
 
 Open http://localhost:5173. The **Viewing as** switch at the bottom of the sidebar changes the role, so you can see what each role is allowed to call.
 
-Checks that run on every Netlify deploy (all passing in this repo):
+Checks to run before every deploy (all passing in this repo):
 
 ```bash
 npm test
@@ -120,33 +121,49 @@ python3 scripts/gen-openapi.py
 
 ---
 
-## 4. Connect the live front end to your API
+## 4. Host the front end with your API
 
-**Recommended: proxy through Netlify (no CORS, no CSP change).** The site's Content-Security-Policy in `netlify.toml` allows API calls **only to its own origin** (`connect-src 'self'`). A browser will therefore **block** calls to `https://api.densparq.in` unless one of two things changes. The simplest is to keep the API on the same origin with a proxy rule. Add this to `netlify.toml`:
+`VITE_*` settings are **baked in at build time**, so set them when you run the build:
 
-```toml
-[[redirects]]
-  from = "/api/*"
-  to = "https://YOUR-API-HOST/api/:splat"
-  status = 200
-  force = true
+```bash
+VITE_API_MODE=http npm run build
 ```
 
-Then, in Netlify → Site configuration → **Environment variables**, set:
+This produces `dist/`, which calls `/api/v1/...` on **the same domain the page is served from**. `VITE_API_BASE` defaults to `/api/v1`.
 
-| Key | Value |
-|---|---|
-| `VITE_API_MODE` | `http` |
-| `VITE_API_BASE` | `/api/v1` (the default, so it can be omitted) |
+**Recommended: serve `dist/` from the same domain as the API.** Then no CORS setup is needed. Pick whichever matches your stack:
+- **From the API itself:** for example, Express `app.use(express.static('dist'))` mounted after the `/api/v1` routes, or the equivalent in your framework.
+- **Behind nginx or another reverse proxy:**
 
-**Alternative: call the API host directly.** Set `VITE_API_BASE=https://api.densparq.in/api/v1`, add that origin to `connect-src` in `netlify.toml`, and enable CORS on the API for the site's origin, including the `Authorization` and `Idempotency-Key` headers.
+```nginx
+server {
+  listen 443 ssl;
+  server_name app.densparq.in;
+  root /srv/densparq/dist;
 
-Either way:
-- `VITE_*` variables are **baked in at build time**. After changing one, trigger a new deploy (Deploys → Trigger deploy).
-- **Front-end work is still needed for real login.** The client reads the token from `localStorage['dsq-token']`, but there is no OTP login screen yet, and the role comes from the demo **Viewing as** picker. A login page has to be built, and the persona picker hidden, before real users can sign in. See BACKEND-HANDOFF §1.
-- Do it in stages. Point a **deploy preview or branch deploy** at the staging API first. Production keeps running on the mock until you're ready.
+  location /api/ { proxy_pass http://127.0.0.1:3000; }   # your API
+  location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; }
+  location = /index.html { add_header Cache-Control "no-cache"; }
+}
+```
 
----
+This setup was **tested**: the `http` build served by a plain Node server called `/api/v1/me/notifications` and `/api/v1/orgs/densparq/tournaments` on the same domain, sent the `Authorization` header, and threw no browser errors.
+
+**Alternative: front end and API on different domains.** Build with `VITE_API_BASE=https://api.densparq.in/api/v1`, and enable CORS on the API for the front-end origin, allowing the `Authorization`, `Content-Type` and `Idempotency-Key` headers.
+
+**Security headers to send with the front end.** These are copied from `netlify.toml`; set them in nginx or your server. Add the API origin to `connect-src` only if you used the different-domains option.
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+```
+
+**Also note:**
+- **Front-end work is still needed for real login.** The client reads the token from `localStorage['dsq-token']`, but there's no OTP login screen yet, and the role comes from the demo **Viewing as** picker. See BACKEND-HANDOFF §1.
+- Stage it first: deploy the `http` build against a staging API before production.
 
 ## 5. Go-live checklist
 
@@ -158,10 +175,10 @@ Either way:
 - [ ] OTP endpoint is rate-limited, and so are the `/public/*` endpoints.
 - [ ] Errors use the `{ error: { code, message, details } }` shape, with codes matching the spec.
 - [ ] Front-end login screen built, persona picker hidden in production.
-- [ ] Netlify proxy or CORS configured, `VITE_API_MODE=http` set, site redeployed.
+- [ ] Front end built with `VITE_API_MODE=http`, served on the API's domain (or CORS set up), security headers set.
 - [ ] Smoke test of the five end-to-end flows listed in the README under "Verified in this build", run against the real API.
 
 ## 6. Rollback
 
-- **Front end:** Netlify → Deploys → pick the previous deploy → **Publish deploy**. That takes seconds. Setting `VITE_API_MODE=mock` and redeploying returns the site to the demo.
+- **Front end:** keep the previous `dist/` build (for example, versioned folders with a symlink) and switch back to it. Building without `VITE_API_MODE` gives the self-contained demo again.
 - **Database:** use your migration tool's down migration, or restore from point-in-time recovery. Take a snapshot before every production migration.
