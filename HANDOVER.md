@@ -42,9 +42,9 @@
 - The rest are listed in `docs/BACKEND-HANDOFF.md`.
 
 ## Access you'll need
-- GitHub: [repo access, if it's made private]
-- Razorpay test keys, the SMS/OTP provider and file-storage credentials: [who provides them, and when]
-- Hosting and database accounts: [yours, or provided by us]
+- GitHub: public
+- Razorpay test keys, the SMS/OTP provider and file-storage credentials
+- Hosting and database accounts
 
 ## Next step
 Review `schema.sql`, `openapi.yaml` and the gaps list, then send back your proposed approach and a rough timeline.
